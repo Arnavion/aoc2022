@@ -1,0 +1,76 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+part1() {
+    local score=0
+
+    while read -r opponent you; do
+        case "$you" in
+            'X')
+                score="$(( score + 1 ))"
+                ;;
+            'Y')
+                score="$(( score + 2 ))"
+                ;;
+            'Z')
+                score="$(( score + 3 ))"
+                ;;
+        esac
+
+        case "$opponent:$you" in
+            'A:X'|'B:Y'|'C:Z')
+                score="$(( score + 3 ))"
+                ;;
+            'A:Y'|'B:Z'|'C:X')
+                score="$(( score + 6 ))"
+                ;;
+        esac
+    done
+
+    echo "$score"
+}
+
+part2() {
+    local score=0
+
+    while read -r opponent result; do
+        case "$opponent:$result" in
+            'A:X'|'B:Z'|'C:Y')
+                score="$(( score + 3 ))"
+                ;;
+            'A:Y'|'B:X'|'C:Z')
+                score="$(( score + 1 ))"
+                ;;
+            'A:Z'|'B:Y'|'C:X')
+                score="$(( score + 2 ))"
+                ;;
+        esac
+
+        case "$result" in
+            'Y')
+                score="$(( score + 3 ))"
+                ;;
+            'Z')
+                score="$(( score + 6 ))"
+                ;;
+        esac
+    done
+
+    echo "$score"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day2 part1)"
+    ( set -x; (( solution1 == 8890 )) )
+
+    solution2="$(<./inputs/day2 part2)"
+    ( set -x; (( solution2 == 10238 )) )
+else
+    test1="$(<./test-inputs/day2 part1)"
+    ( set -x; (( test1 == (2 + 6) + (1 + 0) + (3 + 3) )) )
+
+    test2="$(<./test-inputs/day2 part2)"
+    ( set -x; (( test2 == (1 + 3) + (1 + 0) + (1 + 6) )) )
+fi
