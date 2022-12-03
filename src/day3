@@ -1,0 +1,76 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+(( $(printf '%d' "'a") == 97 ))
+(( $(printf '%d' "'z") == 122 ))
+(( $(printf '%d' "'A") == 65 ))
+(( $(printf '%d' "'Z") == 90 ))
+
+part1() {
+    local sum=0
+
+    while read -r line; do
+        local compartment_length="$(( ${#line} / 2 ))"
+        local first_compartment="${line:0:compartment_length}"
+        local second_compartment="${line:compartment_length}"
+        while read -r type; do
+            type="$(printf '%d' "'$type")"
+            if (( (type >= 97) && (type <= 122) )); then
+                sum="$(( sum + type - 97 + 1 ))"
+            elif (( (type >= 65) && (type <= 90) )); then
+                sum="$(( sum + type - 65 + 27 ))"
+            fi
+        done < <(
+            comm -12 \
+                <(<<< "$first_compartment" fold -w1 | sort) \
+                <(<<< "$second_compartment" fold -w1 | sort) |
+            uniq
+        )
+    done
+
+    echo "$sum"
+}
+
+part2() {
+    local sum=0
+
+    while read -r line1; do
+        read -r line2
+        read -r line3
+
+        local type
+        type="$(
+            comm -12 \
+                <(<<< "$line1" fold -w1 | sort) \
+                <(<<< "$line2" fold -w1 | sort) |
+                comm -12 \
+                    - \
+                    <(<<< "$line3" fold -w1 | sort) |
+                uniq
+        )"
+        type="$(printf '%d' "'$type")"
+        if (( (type >= 97) && (type <= 122) )); then
+            sum="$(( sum + type - 97 + 1 ))"
+        elif (( (type >= 65) && (type <= 90) )); then
+            sum="$(( sum + type - 65 + 27 ))"
+        fi
+    done
+
+    echo "$sum"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day3 part1)"
+    ( set -x; (( solution1 == 8394 )) )
+
+    solution2="$(<./inputs/day3 part2)"
+    ( set -x; (( solution2 == 2413 )) )
+else
+    test1="$(<./test-inputs/day3 part1)"
+    ( set -x; (( test1 == 16 + 38 + 42 + 22 + 20 + 19 )) )
+
+    test2="$(<./test-inputs/day3 part2)"
+    ( set -x; (( test2 == 18 + 52 )) )
+fi
