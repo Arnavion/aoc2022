@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+part1() {
+    local count=0
+
+    while IFS='-,' read -r elf1_start elf1_end elf2_start elf2_end; do
+        if (( (elf1_start >= elf2_start && elf1_end <= elf2_end) || (elf2_start >= elf1_start && elf2_end <= elf1_end) )); then
+            count="$(( count + 1 ))"
+        fi
+    done
+
+    echo "$count"
+}
+
+part2() {
+    local count=0
+
+    while IFS='-,' read -r elf1_start elf1_end elf2_start elf2_end; do
+        if (( (elf1_start >= elf2_start && elf1_start <= elf2_end) || (elf2_start >= elf1_start && elf2_start <= elf1_end) )); then
+            count="$(( count + 1 ))"
+        fi
+    done
+
+    echo "$count"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day4 part1)"
+    ( set -x; (( solution1 == 560 )) )
+
+    solution2="$(<./inputs/day4 part2)"
+    ( set -x; (( solution2 == 839 )) )
+else
+    test1="$(<./test-inputs/day4 part1)"
+    ( set -x; (( test1 == 2 )) )
+
+    test2="$(<./test-inputs/day4 part2)"
+    ( set -x; (( test2 == 4 )) )
+fi
