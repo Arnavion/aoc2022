@@ -1,0 +1,92 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+run() {
+    n="$1"
+
+    fold -w1 | (
+        declare -A seen
+
+        readarray -n "$n" -t prev
+
+        for c in "${prev[@]}"; do
+            seen["$c"]="$(( ${seen["$c"]:-0} + 1 ))"
+        done
+
+        local result="$n"
+
+        while :; do
+            local found_marker=1
+            for k in "${!seen[@]}"; do
+                if (( ${seen["$k"]} > 1 )); then
+                    found_marker=0
+                    break
+                fi
+            done
+            if (( found_marker == 1 )); then
+                break
+            fi
+
+            local new_i="$(( result % n ))"
+
+            local oldest="${prev["$new_i"]:-}"
+            seen["$oldest"]="$(( seen["$oldest"] - 1 ))"
+
+            read -r newest
+            prev["$new_i"]="$newest"
+            seen["$newest"]="$(( ${seen["$newest"]:-0} + 1 ))"
+
+            result="$(( result + 1 ))"
+        done
+
+        echo "$result"
+    )
+}
+
+part1() {
+    run 4
+}
+
+part2() {
+    run 14
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day6 part1)"
+    ( set -x; (( solution1 == 1987 )) )
+
+    solution2="$(<./inputs/day6 part2)"
+    ( set -x; (( solution2 == 3059 )) )
+else
+    test1="$(<./test-inputs/day6a part1)"
+    ( set -x; (( test1 == 7 )) )
+
+    test2="$(<./test-inputs/day6b part1)"
+    ( set -x; (( test2 == 5 )) )
+
+    test3="$(<./test-inputs/day6c part1)"
+    ( set -x; (( test3 == 6 )) )
+
+    test4="$(<./test-inputs/day6d part1)"
+    ( set -x; (( test4 == 10 )) )
+
+    test5="$(<./test-inputs/day6e part1)"
+    ( set -x; (( test5 == 11 )) )
+
+    test6="$(<./test-inputs/day6a part2)"
+    ( set -x; (( test6 == 19 )) )
+
+    test7="$(<./test-inputs/day6b part2)"
+    ( set -x; (( test7 == 23 )) )
+
+    test8="$(<./test-inputs/day6c part2)"
+    ( set -x; (( test8 == 23 )) )
+
+    test9="$(<./test-inputs/day6d part2)"
+    ( set -x; (( test9 == 29 )) )
+
+    test10="$(<./test-inputs/day6e part2)"
+    ( set -x; (( test10 == 26 )) )
+fi
