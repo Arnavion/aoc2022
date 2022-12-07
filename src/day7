@@ -1,0 +1,114 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+parse_input() {
+    local -n outref="$1"
+
+    declare -A directories
+
+    local current_directory='/'
+
+    while read -r first second third; do
+        case "$first" in
+            '$')
+                case "$second" in
+                    'cd')
+                        case "$third" in
+                            '..')
+                                current_directory="${current_directory%/*}"
+                                current_directory="${current_directory:-/}"
+                                ;;
+
+                            '/')
+                                current_directory='/'
+                                ;;
+
+                            *)
+                                if [ "$current_directory" == '/' ]; then
+                                    current_directory="/$third"
+                                else
+                                    current_directory="$current_directory/$third"
+                                fi
+                                ;;
+                        esac
+                        ;;
+
+                    'ls')
+                        ;;
+                esac
+                ;;
+
+            'dir')
+                ;;
+
+            *)
+                local d="$current_directory"
+                while :; do
+                    directories["$d"]="$(( ${directories["$d"]:-0} + first ))"
+
+                    if [ "$d" == '/' ]; then
+                        break
+                    fi
+
+                    d="${d%/*}"
+                    d="${d:-/}"
+                done
+                ;;
+        esac
+    done
+
+    outref=("${directories['/']}")
+
+    for d in "${!directories[@]}"; do
+        if [ "$d" != '/' ]; then
+            outref+=("${directories["$d"]}")
+        fi
+    done
+}
+
+part1() {
+    local sizes
+    parse_input sizes
+
+    local result=0
+
+    for size in "${sizes[@]}"; do
+        if (( size <= 100000 )); then
+            result="$(( result + size ))"
+        fi
+    done
+
+    echo "$result"
+}
+
+part2() {
+    local sizes
+    parse_input sizes
+
+    local to_delete="$(( 30000000 - (70000000 - sizes[0]) ))"
+    local result="${sizes[0]}"
+
+    for size in "${sizes[@]}"; do
+        if (( size >= to_delete && size < result )); then
+            result="$size"
+        fi
+    done
+
+    echo "$result"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day7 part1)"
+    ( set -x; (( solution1 == 1325919 )) )
+
+    solution2="$(<./inputs/day7 part2)"
+    ( set -x; (( solution2 == 2050735 )) )
+else
+    test1="$(<./test-inputs/day7 part1)"
+    ( set -x; (( test1 == 94853 + 584 )) )
+
+    test2="$(<./test-inputs/day7 part2)"
+    ( set -x; (( test2 == 24933642 )) )
+fi
