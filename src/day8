@@ -1,0 +1,146 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+part1() {
+    readarray -t grid
+
+    local num_rows="${#grid[@]}"
+    local num_cols="${#grid[0]}"
+
+    local all_visible_row=''
+    for (( col_i=1; col_i <= num_cols; col_i++ )); do
+        all_visible_row="${all_visible_row}1"
+    done
+    local visible=("$all_visible_row")
+
+    for (( row_i=1; row_i < num_rows - 1; row_i++ )); do
+        local visible_row='1'
+        for (( col_i=1; col_i < num_cols - 1; col_i++ )); do
+            visible_row="${visible_row}0"
+        done
+        visible+=("${visible_row}1")
+    done
+    visible+=("$all_visible_row")
+
+    for (( row_i=1; row_i < num_rows - 1; row_i++ )); do
+        # left
+        local current_height="${grid[$row_i]:0:1}"
+        for (( col_i=1; col_i < num_cols - 1; col_i++ )); do
+            local tree="${grid[$row_i]:$col_i:1}"
+            if (( tree > current_height )); then
+                visible[$row_i]="${visible[$row_i]:0:$col_i}1${visible[$row_i]:$(( col_i + 1 ))}"
+                current_height="$tree"
+            fi
+        done
+
+        # right
+        local current_height="${grid[$row_i]:$(( num_cols - 1 )):1}"
+        for (( col_i = num_cols - 2; col_i > 0; col_i-- )); do
+            local tree="${grid[$row_i]:$col_i:1}"
+            if (( tree > current_height )); then
+                visible[$row_i]="${visible[$row_i]:0:$col_i}1${visible[$row_i]:$(( col_i + 1 ))}"
+                current_height="$tree"
+            fi
+        done
+    done
+
+    for (( col_i=1; col_i < num_cols - 1; col_i++ )); do
+        # up
+        local current_height="${grid[0]:$col_i:1}"
+        for (( row_i=1; row_i < num_rows - 1; row_i++ )); do
+            local tree="${grid[$row_i]:$col_i:1}"
+            if (( tree > current_height )); then
+                visible[$row_i]="${visible[$row_i]:0:$col_i}1${visible[$row_i]:$(( col_i + 1 ))}"
+                current_height="$tree"
+            fi
+        done
+
+        # down
+        local current_height="${grid[$(( num_rows - 1 ))]:$col_i:1}"
+        for (( row_i=num_rows - 2; row_i > 0; row_i-- )); do
+            local tree="${grid[$row_i]:$col_i:1}"
+            if (( tree > current_height )); then
+                visible[$row_i]="${visible[$row_i]:0:$col_i}1${visible[$row_i]:$(( col_i + 1 ))}"
+                current_height="$tree"
+            fi
+        done
+    done
+
+    printf '%s\n' "${visible[@]}" |
+        fold -w1 |
+        grep -c '1'
+}
+
+part2() {
+    readarray -t grid
+
+    local num_rows="${#grid[@]}"
+    local num_cols="${#grid[0]}"
+
+    local result=0
+
+    for (( row_i=1; row_i < num_rows - 1; row_i++ )); do
+        for (( col_i = 1; col_i < num_cols - 1; col_i++ )); do
+            local tree="${grid[$row_i]:$col_i:1}"
+
+            # left
+            local visible_left=0
+            for (( col_j = col_i - 1; col_j >= 0; col_j-- )); do
+                visible_left="$(( visible_left + 1 ))"
+                if (( ${grid[$row_i]:$col_j:1} >= tree )); then
+                    break
+                fi
+            done
+
+            # right
+            local visible_right=0
+            for (( col_j = col_i + 1; col_j < num_cols; col_j++ )); do
+                visible_right="$(( visible_right + 1 ))"
+                if (( ${grid[$row_i]:$col_j:1} >= tree )); then
+                    break
+                fi
+            done
+
+            # up
+            local visible_up=0
+            for (( row_j = row_i - 1; row_j >= 0; row_j-- )); do
+                visible_up="$(( visible_up + 1 ))"
+                if (( ${grid[$row_j]:$col_i:1} >= tree )); then
+                    break
+                fi
+            done
+
+            # down
+            local visible_down=0
+            for (( row_j = row_i + 1; row_j < num_rows; row_j++ )); do
+                visible_down="$(( visible_down + 1 ))"
+                if (( ${grid[$row_j]:$col_i:1} >= tree )); then
+                    break
+                fi
+            done
+
+            local score="$(( visible_left * visible_right * visible_up * visible_down ))"
+            if (( score > result )); then
+                result="$score"
+            fi
+        done
+    done
+
+    echo "$result"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day8 part1)"
+    ( set -x; (( solution1 == 1835 )) )
+
+    solution2="$(<./inputs/day8 part2)"
+    ( set -x; (( solution2 == 263670 )) )
+else
+    test1="$(<./test-inputs/day8 part1)"
+    ( set -x; (( test1 == 21 )) )
+
+    test2="$(<./test-inputs/day8 part2)"
+    ( set -x; (( test2 == 2 * 2 * 2 * 1 )) )
+fi
