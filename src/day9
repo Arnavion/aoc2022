@@ -1,0 +1,196 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+parse_input() {
+    while read -r direction count; do
+        for (( i = 0; i < count; i++ )); do
+            echo "$direction"
+        done
+    done
+}
+
+head() {
+    local x=0
+    local y=0
+
+    while read -r direction; do
+        case "$direction" in
+            'L')
+                x="$(( x - 1))"
+                ;;
+
+            'R')
+                x="$(( x + 1 ))"
+                ;;
+
+            'U')
+                y="$(( y + 1 ))"
+                ;;
+
+            'D')
+                y="$(( y - 1 ))"
+                ;;
+        esac
+
+        echo "$x" "$y"
+    done
+}
+
+follower() {
+    local x=0
+    local y=0
+
+    # https://github.com/koalaman/shellcheck/issues/817
+    # shellcheck disable=SC2034
+    while read -r prev_x prev_y; do
+        case "$(( x - prev_x )):$(( y - prev_y ))" in
+            '-2:-2')
+                x="$(( x + 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '-2:-1')
+                x="$(( x + 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '-2:0')
+                x="$(( x + 1 ))"
+                ;;
+
+            '-2:1')
+                x="$(( x + 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+
+            '-2:2')
+                x="$(( x + 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+
+            '-1:-2')
+                x="$(( x + 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '-1:-1')
+                ;;
+
+            '-1:0')
+                ;;
+
+            '-1:1')
+                ;;
+
+            '-1:2')
+                x="$(( x + 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+
+            '0:-2')
+                y="$(( y + 1 ))"
+                ;;
+
+            '0:-1')
+                ;;
+
+            '0:0')
+                ;;
+
+            '0:1')
+                ;;
+
+            '0:2')
+                y="$(( y - 1 ))"
+                ;;
+
+            '1:-2')
+                x="$(( x - 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '1:-1')
+                ;;
+
+            '1:0')
+                ;;
+
+            '1:1')
+                ;;
+
+            '1:2')
+                x="$(( x - 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+
+            '2:-2')
+                x="$(( x - 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '2:-1')
+                x="$(( x - 1 ))"
+                y="$(( y + 1 ))"
+                ;;
+
+            '2:0')
+                x="$(( x - 1 ))"
+                ;;
+
+            '2:1')
+                x="$(( x - 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+
+            '2:2')
+                x="$(( x - 1 ))"
+                y="$(( y - 1 ))"
+                ;;
+        esac
+
+        echo "$x" "$y"
+    done
+}
+
+part1() {
+    parse_input |
+        head |
+        follower |
+        sort -u |
+        wc -l
+}
+
+part2() {
+    parse_input |
+        head |
+        follower |
+        follower |
+        follower |
+        follower |
+        follower |
+        follower |
+        follower |
+        follower |
+        follower |
+        sort -u |
+        wc -l
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day9 part1)"
+    ( set -x; (( solution1 == 6464 )) )
+
+    solution2="$(<./inputs/day9 part2)"
+    ( set -x; (( solution2 == 2604 )) )
+else
+    test1="$(<./test-inputs/day9a part1)"
+    ( set -x; (( test1 == 13 )) )
+
+    test2="$(<./test-inputs/day9a part2)"
+    ( set -x; (( test2 == 1 )) )
+
+    test3="$(<./test-inputs/day9b part2)"
+    ( set -x; (( test3 == 36 )) )
+fi
