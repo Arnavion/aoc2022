@@ -1,0 +1,104 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+parse_input() {
+    while read -r op arg1; do
+        case "$op" in
+            'noop')
+                echo "$op"
+                ;;
+
+            'addx')
+                echo 'noop'
+                echo "$op" "$arg1"
+                ;;
+        esac
+    done
+}
+
+part1() {
+    local cycle=1
+    local x=1
+    local result=0
+
+    while read -r op arg1; do
+        if (( (cycle - 20) % 40 == 0 )); then
+            result="$(( result + cycle * x ))"
+        fi
+
+        case "$op" in
+            'noop')
+                ;;
+
+            'addx')
+                x="$(( x + arg1 ))"
+                ;;
+        esac
+
+        cycle="$(( cycle + 1 ))"
+    done < <( parse_input )
+
+    echo "$result"
+}
+
+part2() {
+    local cycle=1
+    local x=1
+    local result
+    result="$(printf '.%.0s' {1..240})"
+
+    while read -r op arg1; do
+        local pos="$(( (cycle - 1) % 40 ))"
+        if (( pos == x - 1 || pos == x || pos == x + 1 )); then
+            result="${result:0:$(( cycle - 1 ))}#${result:$cycle}"
+        fi
+
+        case "$op" in
+            'noop')
+                ;;
+
+            'addx')
+                x="$(( x + arg1 ))"
+                ;;
+        esac
+
+        cycle="$(( cycle + 1 ))"
+    done < <( parse_input )
+
+    printf '\n        %s\n        %s\n        %s\n        %s\n        %s\n        %s\n' \
+        "${result:0:40}" \
+        "${result:40:40}" \
+        "${result:80:40}" \
+        "${result:120:40}" \
+        "${result:160:40}" \
+        "${result:200:40}"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day10 part1)"
+    ( set -x; (( solution1 == 12980 )) )
+
+    # BRJLFULP
+    solution2="$(<./inputs/day10 part2)"
+    ( set -x; [ "$solution2" == '
+        ###..###....##.#....####.#..#.#....###..
+        #..#.#..#....#.#....#....#..#.#....#..#.
+        ###..#..#....#.#....###..#..#.#....#..#.
+        #..#.###.....#.#....#....#..#.#....###..
+        #..#.#.#..#..#.#....#....#..#.#....#....
+        ###..#..#..##..####.#.....##..####.#....' ] )
+else
+    test1="$(<./test-inputs/day10 part1)"
+    ( set -x; (( test1 == 13140 )) )
+
+    test2="$(<./test-inputs/day10 part2)"
+    ( set -x; [ "$test2" == '
+        ##..##..##..##..##..##..##..##..##..##..
+        ###...###...###...###...###...###...###.
+        ####....####....####....####....####....
+        #####.....#####.....#####.....#####.....
+        ######......######......######......####
+        #######.......#######.......#######.....' ] )
+fi
