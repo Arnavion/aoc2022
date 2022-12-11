@@ -1,0 +1,193 @@
+#!/bin/bash
+
+# WARNING: Uses `eval`. Only run on trusted input.
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+items_path() {
+    local monkey_i="$1"
+    if [ -z "${TEST:-}" ]; then
+        echo "/tmp/aoc2022-day11-monkey${monkey_i}"
+    else
+        echo "/tmp/aoc2022-day11-test-monkey${monkey_i}"
+    fi
+}
+
+run() {
+    local num_rounds="$1"
+    local div_by="$2"
+    local mod_by="$3"
+
+    local ops=()
+    local arg2s=()
+    local divisible_by=()
+    local if_true=()
+    local if_false=()
+
+    local times_inspected=()
+
+    for (( monkey_i=0; ; monkey_i++ )); do
+        if ! read -r; then
+            break
+        fi
+
+        read -ra starting_items_raw
+        local monkey_items_path
+        monkey_items_path="$(items_path "$monkey_i")"
+        rm -f "$monkey_items_path"
+        # Would be nice to use a FIFO, but there's no way to know about EOF in that case
+        for (( j=2; j < ${#starting_items_raw[@]}; j++ )); do
+            echo "${starting_items_raw[$j]%,}" >> "$monkey_items_path"
+        done
+
+        read -ra operation_raw
+        case "${operation_raw[4]}" in
+            '*'|'+')
+                ops["$monkey_i"]="${operation_raw[4]}"
+                ;;
+
+            *)
+                exit 1
+        esac
+        arg2s["$monkey_i"]="${operation_raw[5]}"
+
+        read -ra test_raw
+        divisible_by["$monkey_i"]="${test_raw[3]}"
+        if (( mod_by != 0 )); then
+            mod_by="$(( mod_by * divisible_by[monkey_i] ))"
+        fi
+
+        read -ra if_true_raw
+        if_true["$monkey_i"]="${if_true_raw[5]}"
+
+        read -ra if_false_raw
+        if_false["$monkey_i"]="${if_false_raw[5]}"
+
+        times_inspected["$monkey_i"]=0
+
+        read -r || :
+    done
+
+    local num_monkeys="${#divisible_by[@]}"
+
+    for (( monkey_i=0; monkey_i < num_monkeys; monkey_i++ )); do
+        local monkey_items_path
+        monkey_items_path="$(items_path "$monkey_i")"
+
+        eval "$(
+            local arg3
+            case "${arg2s[$monkey_i]}" in
+                'old')
+                    arg3='worry'
+                    ;;
+
+                *)
+                    arg3="${arg2s[$monkey_i]}"
+                    ;;
+            esac
+
+            local arg4=''
+            if (( div_by != 1 )); then
+                arg4="worry=\"\$(( worry / $div_by ))\""
+            fi
+
+            local arg5=''
+            if (( mod_by != 0 )); then
+                arg5="worry=\"\$(( worry % $mod_by ))\""
+            fi
+
+            # ShellCheck thinks the `$`s in the template are a typo.
+            # shellcheck disable=SC2016
+            printf \
+                '
+                    monkey_%q() {
+                        local -n times_inspected_ref="$1"
+
+                        while read -r worry; do
+                            worry="$(( worry %s %q ))"
+                            %s
+                            %s
+
+                            if (( worry %% %d == 0 )); then
+                                echo "$worry" >> %q
+                            else
+                                echo "$worry" >> %q
+                            fi
+
+                            times_inspected_ref[%d]="$(( times_inspected_ref[%d] + 1 ))"
+                        done < %q
+
+                        truncate --size=0 %q
+                    }
+                ' \
+                "$monkey_i" \
+                "${ops[$monkey_i]}" \
+                "$arg3" \
+                "$arg4" \
+                "$arg5" \
+                "${divisible_by[$monkey_i]}" \
+                "$(items_path "${if_true[$monkey_i]}")" \
+                "$(items_path "${if_false[$monkey_i]}")" \
+                "$monkey_i" \
+                "$monkey_i" \
+                "$monkey_items_path" \
+                "$monkey_items_path"
+        )"
+    done
+
+    local loop_body=''
+    for (( monkey_i=0; monkey_i < num_monkeys; monkey_i++ )); do
+        loop_body="$(printf '%s\n%s' "${loop_body}" "monkey_${monkey_i} times_inspected_ref2")"
+    done
+    eval "$(
+        # ShellCheck thinks the `$`s in the template are a typo.
+        # shellcheck disable=SC2016
+        printf \
+            '
+                the_loop() {
+                    local num_rounds="$1"
+                    local -n times_inspected_ref2="$2"
+
+                    for (( round_i=0; round_i < num_rounds; round_i++ )); do
+                        %s
+                    done
+                }
+            ' \
+            "$loop_body"
+    )"
+    the_loop "$num_rounds" times_inspected
+
+    printf '%s\n' "${times_inspected[@]}" |
+        sort -nr | (
+            read -r first
+            read -r second
+            echo "$(( first * second ))"
+        )
+}
+
+part1() {
+    run 20 3 0
+}
+
+part2() {
+    run 10000 1 1
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day11 part1)"
+    ( set -x; (( solution1 == 90882 )) )
+
+    if [ -z "${ONLY_FAST:-}" ]; then
+        solution2="$(<./inputs/day11 part2)"
+        ( set -x; (( solution2 == 30893109657 )) )
+    fi
+else
+    test1="$(<./test-inputs/day11 part1)"
+    ( set -x; (( test1 == 105 * 101 )) )
+
+    if [ -z "${ONLY_FAST:-}" ]; then
+        test2="$(<./test-inputs/day11 part2)"
+        ( set -x; (( test2 == 52166 * 52013 )) )
+    fi
+fi
