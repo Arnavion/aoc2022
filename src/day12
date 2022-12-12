@@ -1,0 +1,157 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+run() {
+    readarray -t grid
+
+    local num_rows="${#grid[@]}"
+    local num_cols="${#grid[0]}"
+
+    local s_row=0
+    local s_col=0
+    local e_row=0
+    local e_col=0
+
+    local distances=()
+
+    for (( row_i=0; row_i < num_rows; row_i++ )); do
+        for (( col_i=0; col_i < num_cols; col_i++ )); do
+            case "${grid[$row_i]:$col_i:1}" in
+                'S')
+                    s_row="$row_i";
+                    s_col="$col_i";
+                    ;;
+
+                'E')
+                    e_row="$row_i";
+                    e_col="$col_i";
+                    ;;
+            esac
+
+            distances+=(10000)
+        done
+    done
+
+    distances["$(( e_row * num_cols + e_col ))"]=0
+
+    grid["$s_row"]="${grid[$s_row]:0:$s_col}a${grid[$s_row]:$(( s_col + 1 ))}"
+    grid["$e_row"]="${grid[$e_row]:0:$e_col}z${grid[$e_row]:$(( e_col + 1 ))}"
+
+    local to_visit_path
+    if [ -z "${TEST:-}" ]; then
+        to_visit_path='/tmp/aoc2022-day12'
+    else
+        to_visit_path='/tmp/aoc2022-day12-test'
+    fi
+    rm -f "$to_visit_path"
+
+    echo "$e_row $e_col" >> "$to_visit_path"
+
+    while read -r visit_row visit_col; do
+        local height="${grid[$visit_row]:$visit_col:1}"
+        height="$(printf '%d' "'$height")"
+
+        local distance="${distances[$(( visit_row * num_cols + visit_col ))]}"
+
+        # up
+        if (( visit_row > 0 )); then
+            local up_row="$(( visit_row - 1 ))"
+
+            local up_height="${grid[$up_row]:$visit_col:1}"
+            up_height="$(printf '%d' "'$up_height")"
+
+            if (( up_height >= height - 1 )); then
+                local up_distance="${distances[$(( up_row * num_cols + visit_col ))]}"
+                if (( up_distance > distance + 1 )); then
+                    distances["$(( up_row * num_cols + visit_col ))"]="$(( distance + 1 ))"
+                    echo "$up_row $visit_col" >> "$to_visit_path"
+                fi
+            fi
+        fi
+
+        # down
+        if (( visit_row < num_rows - 1 )); then
+            local down_row="$(( visit_row + 1 ))"
+
+            local down_height="${grid[$down_row]:$visit_col:1}"
+            down_height="$(printf '%d' "'$down_height")"
+
+            if (( down_height >= height - 1 )); then
+                local down_distance="${distances[$(( down_row * num_cols + visit_col ))]}"
+                if (( down_distance > distance + 1 )); then
+                    distances["$(( down_row * num_cols + visit_col ))"]="$(( distance + 1 ))"
+                    echo "$down_row $visit_col" >> "$to_visit_path"
+                fi
+            fi
+        fi
+
+        # left
+        if (( visit_col > 0 )); then
+            local left_col="$(( visit_col - 1 ))"
+
+            local left_height="${grid[$visit_row]:$left_col:1}"
+            left_height="$(printf '%d' "'$left_height")"
+
+            if (( left_height >= height - 1 )); then
+                local left_distance="${distances[$(( visit_row * num_cols + left_col ))]}"
+                if (( left_distance > distance + 1 )); then
+                    distances["$(( visit_row * num_cols + left_col ))"]="$(( distance + 1 ))"
+                    echo "$visit_row $left_col" >> "$to_visit_path"
+                fi
+            fi
+        fi
+
+        # right
+        if (( visit_col < num_cols - 1 )); then
+            local right_col="$(( visit_col + 1 ))"
+
+            local right_height="${grid[$visit_row]:$right_col:1}"
+            right_height="$(printf '%d' "'$right_height")"
+
+            if (( right_height >= height - 1 )); then
+                local right_distance="${distances[$(( visit_row * num_cols + right_col ))]}"
+                if (( right_distance > distance + 1 )); then
+                    distances["$(( visit_row * num_cols + right_col ))"]="$(( distance + 1 ))"
+                    echo "$visit_row $right_col" >> "$to_visit_path"
+                fi
+            fi
+        fi
+    done < "$to_visit_path"
+
+    # Part 1
+    echo "${distances[$(( s_row * num_cols + s_col ))]}"
+
+    # Part 2
+    local part2_result=10000
+    for (( row_i=0; row_i < num_rows; row_i++ )); do
+        for (( col_i=0; col_i < num_cols; col_i++ )); do
+            if [ "${grid[$row_i]:$col_i:1}" == 'a' ]; then
+                local distance="${distances[$(( row_i * num_cols + col_i ))]}"
+                if (( distance < part2_result )); then
+                    part2_result="$distance"
+                fi
+            fi
+        done
+    done
+    echo "$part2_result"
+}
+
+if [ -z "${TEST:-}" ]; then
+    <./inputs/day12 run | (
+        read -r solution1
+        ( set -x; (( solution1 == 383 )) )
+
+        read -r solution2
+        ( set -x; (( solution2 == 377 )) )
+    )
+else
+    <./test-inputs/day12 run | (
+        read -r test1
+        ( set -x; (( test1 == 31 )) )
+
+        read -r test2
+        ( set -x; (( test2 == 29 )) )
+    )
+fi
