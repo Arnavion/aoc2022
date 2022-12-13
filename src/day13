@@ -1,0 +1,299 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+to_fs() {
+    local line="$1"
+    local dir="$2"
+
+    rm -rf "$dir"
+    to_fs_inner 0 "$line" "$dir"
+}
+
+to_fs_inner() {
+    local n="$1"
+    local line="$2"
+    local dir="$3"
+
+    mkdir -p "$dir"
+
+    while [ -n "$line" ]; do
+        case "${line:0:1}" in
+            '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9')
+                local num
+                num="$(expr "$line" : '\([0-9]*\)' || :)"
+                line="${line:${#num}}"
+                echo "$num" >"$dir/$n"
+                n="$(( n + 1 ))"
+                ;;
+
+            ',')
+                line="${line:1}"
+                ;;
+
+            '[')
+                line="${line:1}"
+                line="$(to_fs_inner 0 "$line" "$dir/$n")"
+                n="$(( n + 1 ))"
+                ;;
+
+            ']')
+                line="${line:1}"
+                echo "$line"
+                return
+                ;;
+        esac
+    done
+}
+
+compare() {
+    local f1="$1"
+    local f2="$2"
+
+    local f1_is
+    if [ -d "$f1" ]; then
+        f1_is='d'
+    elif [ -f "$f1" ]; then
+        f1_is='f'
+    else
+        f1_is='!'
+    fi
+
+    local f2_is
+    if [ -d "$f2" ]; then
+        f2_is='d'
+    elif [ -f "$f2" ]; then
+        f2_is='f'
+    else
+        f2_is='!'
+    fi
+
+    case "${f1_is}${f2_is}" in
+        'dd')
+            for (( n=0; ; n++ )); do
+                if ! [ -e "$f1/$n" ] && ! [ -e "$f2/$n" ]; then
+                    echo '0'
+                    return
+                fi
+
+                local result
+                result="$(compare "$f1/$n" "$f2/$n")"
+                if (( result != 0 )); then
+                    echo "$result"
+                    return
+                fi
+            done
+            ;;
+
+        'ff')
+            local left
+            left="$(cat "$f1")"
+            local right
+            right="$(cat "$f2")"
+            if (( left < right )); then
+                echo '-1'
+            elif (( left == right )); then
+                echo '0'
+            else
+                echo '1'
+            fi
+            ;;
+
+        'df')
+            local result
+            result="$(compare "$f1/0" "$f2")"
+            if (( result != 0 )); then
+                echo "$result"
+            elif [ -e "$f1/1" ]; then
+                echo '1'
+            else
+                echo '0'
+            fi
+            ;;
+
+        'fd')
+            local result
+            result="$(compare "$f1" "$f2/0")"
+            if (( result != 0 )); then
+                echo "$result"
+            elif [ -e "$f2/1" ]; then
+                echo '-1'
+            else
+                echo '0'
+            fi
+            ;;
+
+        'd!'|'f!')
+            echo '1'
+            ;;
+
+        '!d'|'!f')
+            echo '-1'
+            ;;
+
+        '!!')
+            echo '0'
+            ;;
+    esac
+}
+
+part1() {
+    local state_path
+    if [ -z "${TEST:-}" ]; then
+        state_path='/tmp/aoc2022-day13'
+    else
+        state_path='/tmp/aoc2022-day13-test'
+    fi
+    rm -rf "$state_path"
+
+    mkdir -p "$state_path"
+    touch "$state_path/part1"
+
+    local pair_num=1
+    while read -r line1; do
+        read -r line2
+        read -r || :
+
+        (
+            to_fs "$line1" "$state_path/$pair_num.first"
+            to_fs "$line2" "$state_path/$pair_num.second"
+
+            local compare_result
+            compare_result="$(compare "$state_path/$pair_num.first" "$state_path/$pair_num.second")"
+
+            if (( compare_result != 1 )); then
+                flock -x "$state_path/part1" -c "
+                    echo '$pair_num' >>'$state_path/part1'
+                "
+            fi
+        ) &
+
+        pair_num="$(( pair_num + 1 ))"
+    done
+
+    # shellcheck disable=SC2046
+    wait $(jobs -pr)
+
+    local result=0
+    while read -r pair_num; do
+        result="$(( result + pair_num ))"
+    done <"$state_path/part1"
+    echo "$result"
+}
+
+sorter() {
+    local state_path="$1"
+    local slot="$2"
+
+    (
+        local current_max=''
+
+        while read -r compare_result_prev; do
+            read -r i
+
+            if [ -z "$current_max" ]; then
+                current_max="$i"
+            elif (( compare_result_prev == -1 )); then
+                echo "$compare_result_prev"
+                echo "$current_max"
+                current_max="$i"
+            else
+                local compare_result
+                compare_result="$(compare "$state_path/$current_max" "$state_path/$i")"
+                echo "$compare_result"
+                if (( compare_result == -1 )); then
+                    echo "$current_max"
+                    current_max="$i"
+                else
+                    echo "$i"
+                fi
+            fi
+        done
+
+        if [ -n "$current_max" ]; then
+            mv "$state_path/$current_max" "$state_path/sorted.$slot"
+        fi
+    ) |
+        if (( slot > 1 )); then
+            sorter "$state_path" "$(( slot - 1 ))"
+        else
+            exec cat
+        fi
+}
+
+part2() {
+    local state_path
+    if [ -z "${TEST:-}" ]; then
+        state_path='/tmp/aoc2022-day13'
+    else
+        state_path='/tmp/aoc2022-day13-test'
+    fi
+    rm -rf "$state_path"
+
+    local num_packets=0
+    while read -r line; do
+        if [ -z "$line" ]; then
+            continue
+        fi
+
+        to_fs "$line" "$state_path/$num_packets" &
+        num_packets="$(( num_packets + 1 ))"
+    done < <( cat; echo '[[2]]'; echo '[[6]]' )
+
+    # shellcheck disable=SC2046
+    wait $(jobs -pr)
+
+    for (( i=0; i < num_packets; i++ )); do
+        echo 1
+        echo "$i"
+    done |
+        sorter "$state_path" "$num_packets"
+
+    local div1_index=-1
+    local div2_index=-1
+    for (( i = 0; i < num_packets; i++ )); do
+        if \
+            [ -f "$state_path/sorted.$i/0/0/0" ] &&
+            ! [ -e "$state_path/sorted.$i/0/0/1" ] &&
+            ! [ -e "$state_path/sorted.$i/0/1" ] &&
+            ! [ -e "$state_path/sorted.$i/1" ]
+        then
+            local content
+            content="$(cat "$state_path/sorted.$i/0/0/0")"
+            case "$content" in
+                '2')
+                    div1_index="$i"
+                    ;;
+                '6')
+                    div2_index="$i"
+                    ;;
+            esac
+        fi
+
+        if (( div1_index >= 0 && div2_index >= 0 )); then
+            break
+        fi
+    done
+
+    (( div1_index >= 0 ))
+    (( div2_index >= 0 ))
+
+    echo "$(( div1_index * div2_index ))"
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day13 part1)"
+    ( set -x; (( solution1 == 5938 )) )
+
+    if [ -z "${ONLY_FAST:-}" ]; then
+        solution2="$(<./inputs/day13 part2)"
+        ( set -x; (( solution2 == 29025 )) )
+    fi
+else
+    test1="$(<./test-inputs/day13 part1)"
+    ( set -x; (( test1 == 1 + 2 + 4 + 6 )) )
+
+    test2="$(<./test-inputs/day13 part2)"
+    ( set -x; (( test2 == 10 * 14 )) )
+fi
