@@ -1,0 +1,233 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+parse_input() {
+    local -n grid_ref="$1"
+    local -n min_x_ref="$2"
+    local -n max_x_ref="$3"
+
+    grid_ref=();
+
+    min_x_ref=500
+    max_x_ref=501
+
+    while read -r line; do
+        <<< "$line" IFS=', ->' read -ra tokens
+
+        local start_x=''
+        local start_y=''
+
+        for (( i=0; i < "${#tokens[@]}"; i += 3 )); do
+            local end_x="${tokens[$i]}"
+            local end_y="${tokens[$(( i + 1 ))]}"
+
+            while (( end_x < min_x_ref )); do
+                for (( y=0; y < "${#grid_ref[@]}"; y++ )); do
+                    grid_ref["$y"]=".${grid_ref[$y]}"
+                done
+                min_x_ref="$(( min_x_ref - 1 ))"
+            done
+
+            while (( end_x >= max_x_ref )); do
+                for (( y=0; y < "${#grid_ref[@]}"; y++ )); do
+                    grid_ref["$y"]="${grid_ref[$y]}."
+                done
+                max_x_ref="$(( max_x_ref + 1 ))"
+            done
+
+            if [ "$start_x" != '' ]; then
+                local draw_start_x
+                if (( start_x > end_x )); then
+                    draw_start_x="$end_x"
+                    draw_end_x="$start_x"
+                else
+                    draw_start_x="$start_x"
+                    draw_end_x="$end_x"
+                fi
+
+                local draw_start_y
+                if (( start_y > end_y )); then
+                    draw_start_y="$end_y"
+                    draw_end_y="$start_y"
+                else
+                    draw_start_y="$start_y"
+                    draw_end_y="$end_y"
+                fi
+
+                for (( y=draw_start_y; y <= draw_end_y; y++ )); do
+                    for (( fill_y=0; fill_y <= y; fill_y++ )); do
+                        if [ -z "${grid_ref["$fill_y"]:-}" ]; then
+                            grid_ref["$fill_y"]=''
+                            for (( x=min_x_ref; x < max_x_ref; x++ )); do
+                                grid_ref["$fill_y"]="${grid_ref[$fill_y]}."
+                            done
+                        fi
+                    done
+
+                    for (( x=draw_start_x; x <= draw_end_x; x++ )); do
+                        grid_ref["$y"]="${grid_ref[$y]:0:$(( x - min_x_ref ))}#${grid_ref[$y]:$(( x - min_x_ref + 1 ))}"
+                    done
+                done
+            fi
+
+            start_x="$end_x"
+            start_y="$end_y"
+        done
+    done
+}
+
+part1() {
+    local grid
+    local min_x
+    local max_x
+
+    parse_input grid min_x max_x
+
+    local max_y="${#grid[@]}"
+
+    for (( result=0; ; result++ )); do
+        local x="$(( 500 - min_x ))"
+        local y=0
+
+        while :; do
+            if (( y == max_y - 1 )); then
+                echo "$result"
+                return
+            fi
+
+            # below
+            while (( y < max_y - 1 )) && [ "${grid["$(( y + 1 ))"]:$x:1}" == '.' ]; do
+                y="$(( y + 1 ))"
+            done
+
+            if (( y == max_y - 1 )); then
+                echo "$result"
+                return
+            fi
+
+            # below left
+            if (( x == 0 )); then
+                for (( expand_y=0; expand_y < max_y; expand_y++ )); do
+                    grid["$expand_y"]=".${grid["$expand_y"]}"
+                done
+                min_x="$(( min_x - 1 ))"
+                x=1
+            fi
+            if [ "${grid["$(( y + 1 ))"]:$(( x - 1 )):1}" == '.' ]; then
+                x="$(( x - 1 ))"
+                y="$(( y + 1 ))"
+                continue
+            fi
+
+            # below right
+            if (( x + min_x == max_x - 1 )); then
+                for (( expand_y=0; expand_y < max_y; expand_y++ )); do
+                    grid["$expand_y"]="${grid["$expand_y"]}."
+                done
+                max_x="$(( max_x + 1 ))"
+            fi
+            if [ "${grid["$(( y + 1 ))"]:$(( x + 1 )):1}" == '.' ]; then
+                x="$(( x + 1 ))"
+                y="$(( y + 1 ))"
+                continue
+            fi
+
+            # rest
+            grid["$y"]="${grid[$y]:0:$x}o${grid[$y]:$(( x + 1 ))}"
+            break
+        done
+    done
+}
+
+part2() {
+    local grid
+    local min_x
+    local max_x
+
+    parse_input grid min_x max_x
+
+    local max_y="${#grid[@]}"
+    grid["$max_y"]=''
+    grid["$(( max_y + 1 ))"]=''
+    grid["$(( max_y + 2 ))"]=''
+    for (( x=min_x; x < max_x; x++ )); do
+        grid["$max_y"]="${grid[$max_y]}."
+        grid["$(( max_y + 1 ))"]="${grid[$(( max_y + 1 ))]}#"
+        grid["$(( max_y + 2 ))"]="${grid[$(( max_y + 2 ))]}."
+    done
+    max_y="$(( max_y + 3 ))"
+
+    for (( result=0; ; result++ )); do
+        local x=500
+        local y=0
+
+        while :; do
+            # below
+            while [ "${grid["$(( y + 1 ))"]:$(( x - min_x )):1}" == '.' ]; do
+                y="$(( y + 1 ))"
+            done
+
+            # below left
+            if (( x == min_x )); then
+                for (( expand_y=0; expand_y < max_y; expand_y++ )); do
+                    if (( expand_y == max_y - 2 )); then
+                        grid["$expand_y"]="#${grid["$expand_y"]}"
+                    else
+                        grid["$expand_y"]=".${grid["$expand_y"]}"
+                    fi
+                done
+                min_x="$(( min_x - 1 ))"
+            fi
+            if [ "${grid["$(( y + 1 ))"]:$(( x - min_x - 1 )):1}" == '.' ]; then
+                x="$(( x - 1 ))"
+                y="$(( y + 1 ))"
+                continue
+            fi
+
+            # below right
+            if (( x == max_x - 1 )); then
+                for (( expand_y=0; expand_y < max_y; expand_y++ )); do
+                    if (( expand_y == max_y - 2 )); then
+                        grid["$expand_y"]="${grid["$expand_y"]}#"
+                    else
+                        grid["$expand_y"]="${grid["$expand_y"]}."
+                    fi
+                done
+                max_x="$(( max_x + 1 ))"
+            fi
+            if [ "${grid["$(( y + 1 ))"]:$(( x - min_x + 1 )):1}" == '.' ]; then
+                x="$(( x + 1 ))"
+                y="$(( y + 1 ))"
+                continue
+            fi
+
+            # rest
+            grid["$y"]="${grid[$y]:0:$(( x - min_x ))}o${grid[$y]:$(( x - min_x + 1 ))}"
+
+            if (( x == 500 && y == 0 )); then
+                echo "$(( result + 1 ))"
+                return
+            fi
+
+            break
+        done
+    done
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day14 part1)"
+    ( set -x; (( solution1 == 610 )) )
+
+    if [ -z "${ONLY_FAST:-}" ]; then
+        solution2="$(<./inputs/day14 part2)"
+        ( set -x; (( solution2 == 27194 )) )
+    fi
+else
+    test1="$(<./test-inputs/day14 part1)"
+    ( set -x; (( test1 == 24 )) )
+
+    test2="$(<./test-inputs/day14 part2)"
+    ( set -x; (( test2 == 93 )) )
+fi
