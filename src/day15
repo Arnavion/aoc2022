@@ -1,0 +1,253 @@
+#!/bin/bash
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+manhattan_distance() {
+    local a_x="$1"
+    local a_y="$2"
+    local b_x="$3"
+    local b_y="$4"
+
+    local distance_x="$(( b_x - a_x ))"
+    if (( distance_x < 0 )); then
+        distance_x="$(( -distance_x ))"
+    fi
+    local distance_y="$(( b_y - a_y ))"
+    if (( distance_y < 0 )); then
+        distance_y="$(( -distance_y ))"
+    fi
+    echo "$(( distance_x + distance_y ))"
+}
+
+part1() {
+    local check_y
+    if [ -z "${TEST:-}" ]; then
+        check_y=2000000
+    else
+        check_y=10
+    fi
+
+    local sensor_xs=()
+    local sensor_ys=()
+    local beacon_xs=()
+    local beacon_ys=()
+    local beacon_distances=()
+
+    local empty_start_xs=()
+    local empty_end_xs=()
+
+    while read -ra tokens; do
+        local sensor_x="${tokens[2]:2}"
+        sensor_x="${sensor_x//,}"
+
+        local sensor_y="${tokens[3]:2}"
+        sensor_y="${sensor_y//:}"
+
+        local beacon_x="${tokens[8]:2}"
+        beacon_x="${beacon_x//,}"
+
+        local beacon_y="${tokens[9]:2}"
+        beacon_y="${beacon_y//:}"
+
+        local beacon_distance
+        beacon_distance="$(manhattan_distance "$sensor_x" "$sensor_y" "$beacon_x" "$beacon_y")"
+
+        # Ignore sensors that are so far that they don't affect the check_y row
+        local vertical_distance_to_check_row
+        vertical_distance_to_check_row="$(manhattan_distance "$sensor_x" "$sensor_y" "$sensor_x" "$check_y")"
+        if (( vertical_distance_to_check_row >= beacon_distance )); then
+            continue
+        fi
+
+        sensor_xs+=("$sensor_x")
+        sensor_ys+=("$sensor_y")
+        beacon_xs+=("$beacon_x")
+        beacon_ys+=("$beacon_y")
+        beacon_distances+=("$beacon_distance")
+
+        # Calculate intersection of beacon_distance with check_y row and register that range as empty. If the beacon is on the check_y row, remove it from the range.
+        local empty_start_x="$(( sensor_x - (beacon_distance - vertical_distance_to_check_row) ))"
+        local empty_end_x="$(( sensor_x + (beacon_distance - vertical_distance_to_check_row) ))"
+        if (( empty_start_x == beacon_x )); then
+            empty_start_x="$(( empty_start_x + 1 ))"
+        fi
+        if (( empty_end_x == beacon_x )); then
+            empty_end_x="$(( empty_end_x - 1 ))"
+        fi
+        if (( empty_start_x > empty_end_x )); then
+            continue
+        fi
+        empty_start_xs+=("$empty_start_x")
+        empty_end_xs+=("$empty_end_x")
+    done
+
+    readarray -t empty_ranges < <(
+        for (( i=0; i < ${#empty_start_xs[@]}; i++ )); do
+            echo "${empty_start_xs[$i]} ${empty_end_xs[$i]}"
+        done |
+            sort -n
+    )
+
+    local result=0
+    local current_range_start=''
+    local current_range_end=''
+    for (( i=0; i < ${#empty_ranges[@]}; i++ )); do
+        read -r range_start range_end <<< "${empty_ranges[$i]}"
+
+        if [ -z "$current_range_start" ]; then
+            result="$(( result + range_end - range_start + 1 ))"
+            current_range_start="$range_start"
+            current_range_end="$range_end"
+        elif (( range_start >= current_range_start && range_start <= current_range_end + 1 )); then
+            if (( range_end > current_range_end )); then
+                result="$(( result + range_end - current_range_end ))"
+                current_range_end="$range_end"
+            fi
+        else
+            result="$(( result + range_end - range_start + 1 ))"
+            current_range_start="$range_start"
+            current_range_end="$range_end"
+        fi
+    done
+    echo "$result"
+}
+
+part2() {
+    local check_max
+    if [ -z "${TEST:-}" ]; then
+        check_max=4000000
+    else
+        check_max=20
+    fi
+
+    local state_path
+    if [ -z "${TEST:-}" ]; then
+        state_path='/tmp/aoc2022-day15'
+    else
+        state_path='/tmp/aoc2022-day15-test'
+    fi
+
+    rm -rf "$state_path"
+    mkdir -p "$state_path"
+
+    local sensor_xs=()
+    local sensor_ys=()
+    local beacon_xs=()
+    local beacon_ys=()
+    local beacon_distances=()
+
+    local sensor_i=0
+    while read -ra tokens; do
+        local sensor_x="${tokens[2]:2}"
+        sensor_x="${sensor_x//,}"
+
+        local sensor_y="${tokens[3]:2}"
+        sensor_y="${sensor_y//:}"
+
+        local beacon_x="${tokens[8]:2}"
+        beacon_x="${beacon_x//,}"
+
+        local beacon_y="${tokens[9]:2}"
+        beacon_y="${beacon_y//:}"
+
+        local beacon_distance
+        beacon_distance="$(manhattan_distance "$sensor_x" "$sensor_y" "$beacon_x" "$beacon_y")"
+
+        sensor_xs+=("$sensor_x")
+        sensor_ys+=("$sensor_y")
+        beacon_xs+=("$beacon_x")
+        beacon_ys+=("$beacon_y")
+        beacon_distances+=("$beacon_distance")
+
+        (
+            local undiscovered_beacon_distance="$(( beacon_distance + 1 ))"
+
+            for (( dx=0; dx < undiscovered_beacon_distance; dx++ )); do
+                local dy="$(( undiscovered_beacon_distance - dx ))"
+
+                for check_x in "$(( sensor_x - dx ))" "$(( sensor_x + dx ))"; do
+                    for check_y in "$(( sensor_y - dy ))" "$(( sensor_y + dy ))"; do
+                        if (( check_x >= 0 && check_x <= check_max && check_y >= 0 && check_y <= check_max )); then
+                            echo "$check_x $check_y"
+                        fi
+                    done
+                done
+            done |
+                sort >"$state_path/$sensor_i"
+        ) &
+
+        sensor_i="$(( sensor_i + 1 ))"
+    done
+
+    # shellcheck disable=SC2046
+    wait $(jobs -pr)
+
+    local num_sensors="${#sensor_xs[@]}"
+
+    # Undiscovered beacon will be exactly one unit further from two particular sensor than their corresponding beacons,
+    # and one unit or more further from all other sensors than their corresponding beacons.
+    #
+    # TODO: Stop computation when one result is found.
+    # TODO: Better algorithm?
+    for (( sensor_i=0; sensor_i < num_sensors - 3; sensor_i++ )); do
+        (
+            for (( sensor_j=sensor_i + 1; sensor_j < num_sensors; sensor_j++ )); do
+                while read -r check_x check_y; do
+                    local valid=1
+
+                    for (( sensor_z=0; sensor_z < num_sensors; sensor_z++ )); do
+                        if (( sensor_z == sensor_i || sensor_z == sensor_j )); then
+                            continue
+                        fi
+
+                        if ((
+                            (check_x == ${sensor_xs[$sensor_z]} && check_y == ${sensor_ys[$sensor_z]}) ||
+                            (check_x == ${beacon_xs[$sensor_z]} && check_y == ${beacon_ys[$sensor_z]})
+                        )); then
+                            valid=0
+                            break
+                        fi
+
+                        local check_distance
+                        check_distance="$(manhattan_distance "${sensor_xs[$sensor_z]}" "${sensor_ys[$sensor_z]}" "$check_x" "$check_y")"
+                        if (( check_distance <= ${beacon_distances[$sensor_z]} )); then
+                            valid=0
+                            break
+                        fi
+                    done
+
+                    if (( valid == 1 )); then
+                        echo "[$check_x,$check_y]" >&2
+                        echo "$(( check_x * 4000000 + check_y ))"
+                        return
+                    fi
+                done < <(
+                    comm -12 "$state_path/$sensor_i" "$state_path/$sensor_j"
+                )
+            done
+
+            echo "sensor_i=$sensor_i done" >&2
+        ) &
+    done |
+        head -n1
+
+    # shellcheck disable=SC2046
+    wait $(jobs -pr)
+}
+
+if [ -z "${TEST:-}" ]; then
+    solution1="$(<./inputs/day15 part1)"
+    ( set -x; (( solution1 == 5508234 )) )
+
+    if [ -z "${ONLY_FAST:-}" ]; then
+        solution2="$(<./inputs/day15 part2)"
+        ( set -x; (( solution2 == 2614408 * 4000000 + 2860779 )) )
+    fi
+else
+    test1="$(<./test-inputs/day15 part1)"
+    ( set -x; (( test1 == 26 )) )
+
+    test2="$(<./test-inputs/day15 part2)"
+    ( set -x; (( test2 == 14 * 4000000 + 11 )) )
+fi
